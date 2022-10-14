@@ -1,30 +1,30 @@
 {
-  "name": "@lc-cn/ts-dev-template",
-  "version": "1.0.0",
-  "description": "ts开发环境配置",
+  "name": "@zhinjs/schema",
+  "version": "0.0.1",
+  "description": "zhin配置声明模块",
   "main": "lib/index.js",
   "scripts": {
     "start": "node .",
     "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/index.ts",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
     "pub": "npm publish --access public",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lc-cn/ts-dev-template.git"
+    "url": "git+https://github.com/zhinjs/schema.git"
   },
   "keywords": [
-    "ts",
-    "dev",
-    "template"
+    "schema",
+    "zhin",
+    "zhinjs"
   ],
   "author": "凉菜",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/lc-cn/ts-dev-template/issues"
+    "url": "https://github.com/zhinjs/schema/issues"
   },
-  "homepage": "https://github.com/lc-cn/ts-dev-template#readme",
+  "homepage": "https://github.com/zhinjs/schema#readme",
   "devDependencies": {
     "@types/node": "latest",
     "ts-node-dev": "latest",
