@@ -1,12 +1,14 @@
 {
   "name": "@zhinjs/schema",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "description": "zhin配置声明模块",
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
     "start": "node .",
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
+    "compile": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
+    "build": "npm run compile && dtsc --project tsconfig.dtsc.json",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/index.ts",
     "pub": "npm publish --access public",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -28,6 +30,7 @@
   "devDependencies": {
     "@types/node": "latest",
     "ts-node-dev": "latest",
+    "dtsc": "^2.2.3",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "typescript": "latest"
