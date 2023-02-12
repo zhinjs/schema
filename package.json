@@ -1,6 +1,6 @@
 {
   "name": "@zhinjs/schema",
-  "version": "0.0.4",
+  "version": "0.0.5-1",
   "description": "zhin配置声明模块",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -29,8 +29,8 @@
   "homepage": "https://github.com/zhinjs/schema#readme",
   "devDependencies": {
     "@types/node": "latest",
+    "dtsc": "^2.3.0",
     "ts-node-dev": "latest",
-    "dtsc": "^2.2.3",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "typescript": "latest"
@@ -40,5 +40,7 @@
     "/lib/**/*.d.ts",
     "/lib/**/LICENSE"
   ],
-  "dependencies": {}
+  "dependencies": {
+    "@zhinjs/shared": "^0.0.3"
+  }
 }
