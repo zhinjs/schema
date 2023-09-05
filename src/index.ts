@@ -46,7 +46,15 @@ export class Schema<S = any,T=S> {
         this.meta.default = defaultValue;
         return this;
     }
-
+    option(list: Schema.Option<T>[]): this {
+        this.meta.options=Schema.formatOptionList(list)
+        return this
+    }
+    multiple(): this {
+        if(this.meta.type!=='array') throw new Error('multiple only support array type')
+        this.meta.multiple=true
+        return this
+    }
     min(min: number): this {
         this.meta.min = min;
         return this;
@@ -116,26 +124,6 @@ export interface Schema<S = any> {
     (value?: S): S;
 }
 export namespace Schema {
-    export function checkDefault<T>(schema: Schema, value: T,fallback:T=value) {
-        const isEmpty=(value: string | object | T)=>{
-            if (typeof value === "undefined") return true;
-            if (typeof value === "string" && value === "") return true;
-            if (typeof value === "object" && value === null) return true;
-            if (Array.isArray(value) && value.length === 0) return true;
-            if(value instanceof Date && isNaN(value.getTime())) return true;
-            return value && typeof value === 'object' && Reflect.ownKeys(value).length === 0;
-
-        }
-        if (isEmpty(value)) {
-            if (typeof schema.meta.default === "function") {
-                value = schema.meta.default();
-            } else {
-                value = schema.meta.default||fallback;
-            }
-        }
-        if(schema.meta.required && typeof value === 'undefined') throw new Error(`${schema.meta.key||'value'} is required`)
-        return value;
-    }
     export const formatters: Map<string, Formatter> = new Map<string, Formatter>();
     export type Formatter<S=any,T=S> = (this: Schema, value: S) => T;
     export interface Meta<S = any,T=S> {
@@ -143,6 +131,8 @@ export namespace Schema {
         type?: string;
         default?: T extends {} ? Partial<T> : T|(()=>T);
         required?: boolean;
+        options?: Option[];
+        multiple?:boolean;
         description?: string;
         component?: string;
         min?: number;
@@ -165,6 +155,42 @@ export namespace Schema {
     export type Tuple<X extends readonly any[]> = X extends readonly [infer L, ...infer R]
         ? [Types<L>, ...Tuple<R>]
         : [];
+
+    export function checkDefault<T>(schema: Schema, value: T,fallback:T=value) {
+        const isEmpty=(value: string | object | T)=>{
+            if (typeof value === "undefined") return true;
+            if (typeof value === "string" && value === "") return true;
+            if (typeof value === "object" && value === null) return true;
+            if (Array.isArray(value) && value.length === 0) return true;
+            if(value instanceof Date && isNaN(value.getTime())) return true;
+            return value && typeof value === 'object' && Reflect.ownKeys(value).length === 0;
+
+        }
+        if (isEmpty(value)) {
+            if (typeof schema.meta.default === "function") {
+                value = schema.meta.default();
+            } else {
+                value = schema.meta.default||fallback;
+            }
+        }
+        if(schema.meta.required && typeof value === 'undefined') throw new Error(`${schema.meta.key||'value'} is required`)
+        return value;
+    }
+    export type Option<T=any>=T|{
+        label:string
+        value:T
+    }
+    export function formatOptionList<T>(list: Schema.Option<T>[]) {
+        return list.map(item => {
+            if (typeof item === "string") {
+                return {
+                    label: item,
+                    value: item,
+                };
+            }
+            return item;
+        });
+    }
 }
 Schema.extend("number", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value);
