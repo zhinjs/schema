@@ -105,7 +105,7 @@ export interface Schema<S = any> {
 }
 export namespace Schema {
     export function checkDefault<T>(schema: Schema, value: T,fallback:T=value) {
-        const isEmpty=(value)=>{
+        const isEmpty=(value: string | object | T)=>{
             if (typeof value === "undefined") return true;
             if (typeof value === "string" && value === "") return true;
             if (typeof value === "object" && value === null) return true;
