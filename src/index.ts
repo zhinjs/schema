@@ -17,7 +17,18 @@ export class Schema<S = any,T=S> {
             }
         })
     }
-
+    toJSON(){
+        return {
+            ...this.meta,
+            default:typeof this.meta.default === 'function' ? this.meta.default() : this.meta.default
+        };
+    }
+    [Symbol.unscopables](){
+        return {
+            options:true,
+            meta:true
+        }
+    }
     required(required?: boolean): this {
         this.meta.required = !!required;
         return this;
