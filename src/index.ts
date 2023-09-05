@@ -105,7 +105,16 @@ export interface Schema<S = any> {
 }
 export namespace Schema {
     export function checkDefault<T>(schema: Schema, value: T,fallback:T=value) {
-        if (typeof value === "undefined") {
+        const isEmpty=(value)=>{
+            if (typeof value === "undefined") return true;
+            if (typeof value === "string" && value === "") return true;
+            if (typeof value === "object" && value === null) return true;
+            if (Array.isArray(value) && value.length === 0) return true;
+            if(value instanceof Date && isNaN(value.getTime())) return true;
+            return value && typeof value === 'object' && Reflect.ownKeys(value).length === 0;
+
+        }
+        if (isEmpty(value)) {
             if (typeof schema.meta.default === "function") {
                 value = schema.meta.default();
             } else {
