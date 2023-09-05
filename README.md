@@ -58,20 +58,21 @@ Schema.dict(
     )
 )
 ```
-## 声明list
+## 声明array
 1. string[]
 ```javascript
-Schema.list(
+Schema.array(
     Schema.string()
 )
 ```
 2. {foo:number,bar:string}[]
 
 ```javascript
-Schema.list(
+Schema.array(
     Schema.object({
         foo:Schema.number(),
         bar:Schema.string()
     })
 )
 ```
+

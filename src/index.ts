@@ -98,8 +98,11 @@ export class Schema<S = any,T=S> {
     static dict<X extends Schema>(inner: X, key?: string) {
         return new Schema<Schema.Dict<X>>({ key: key, type: "dict" }, { inner });
     }
-    static array<X extends Schema>(inner: X, key?: string) {
+    static list<X extends Schema>(inner: X, key?: string) {
         return new Schema<Schema.Types<X>[]>({ key: key, type: "array" }, { inner });
+    }
+    static array<X extends Schema>(inner: X, key?: string) {
+        return Schema.list(inner, key)
     }
     static object<X extends Schema.DictSchema>(dict: X, key?: string) {
         return new Schema<Schema.Object<X>>({ key: key, type: "object" }, { dict });
