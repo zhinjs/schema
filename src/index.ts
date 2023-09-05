@@ -1,540 +1,213 @@
-import {isNullable,isPlainObject,Dict,valueMap,pick,deepClone,deepEqual} from "@zhinjs/shared";
-
-const SchemaKey = Symbol.for('schema')
-
-namespace Schema {
-    export type From<X> =
-        | X extends string | number | boolean ? Schema<X>
-            : X extends Schema ? X
-                : X extends typeof String ? Schema<string>
-                    : X extends typeof Number ? Schema<number>
-                        : X extends typeof Boolean ? Schema<boolean>
-                            : X extends typeof Function ? Schema<Function, (...args: any[]) => any>
-                                : X extends Constructor<infer S> ? Schema<S>
-                                    : never
-
-    type _TypeS<X> = X extends Schema<infer S, unknown> ? S : never
-    type Inverse<X> = X extends Schema<any, infer Y> ? (arg: Y) => void : never
-
-    export type TypeS<X> = _TypeS<From<X>>
-    export type TypeT<X> = ReturnType<From<X>>
-    export type Resolve = (data: any, schema: Schema, strict?: boolean) => [any, any?]
-
-    export type IntersectS<X> = From<X> extends Schema<infer S, unknown> ? S : never
-    export type IntersectT<X> = Inverse<From<X>> extends ((arg: infer T) => void) ? T : never
-
-    type TupleS<X extends readonly any[]> = X extends readonly [infer L, ...infer R] ? [TypeS<L>?, ...TupleS<R>] : any[]
-    type TupleT<X extends readonly any[]> = X extends readonly [infer L, ...infer R] ? [TypeT<L>?, ...TupleT<R>] : any[]
-    type ObjectS<X extends Dict> = { [K in keyof X]?: TypeS<X[K]> } & Dict
-    type ObjectT<X extends Dict> = { [K in keyof X]: TypeT<X[K]> } & Dict
-    type Constructor<T = any> = new (...args: any[]) => T
-
-    export interface Static {
-        <T = any>(options: Partial<Schema.Base<T>>): Schema<T>
-        new <T = any>(options: Partial<Schema.Base<T>>): Schema<T>
-        prototype: Schema
-        resolve: Resolve
-        from<X = any>(source?: X): From<X>
-        extend(type: string, resolve: Resolve): void
-        any(): Schema<any>
-        never(): Schema<never>
-        const<T>(value: T): Schema<T>
-        string(): Schema<string>
-        number(): Schema<number>
-        natural(): Schema<number>
-        percent(): Schema<number>
-        boolean(): Schema<boolean>
-        date(): Schema<string | Date, Date>
-        bitset<K extends string>(bits: Partial<Record<K, number>>): Schema<number | readonly K[], number>
-        function(): Schema<Function, (...args: any[]) => any>
-        is<T>(constructor: Constructor<T>): Schema<T>
-        array<X>(inner: X): Schema<TypeS<X>[], TypeT<X>[]>
-        dict<X, Y extends Schema<any, string> = Schema<string>>(inner: X, sKey?: Y): Schema<Dict<TypeS<X>, TypeS<Y>>, Dict<TypeT<X>, TypeT<Y>>>
-        tuple<X extends readonly any[]>(list: X): Schema<TupleS<X>, TupleT<X>>
-        object<X extends Dict>(dict: X): Schema<ObjectS<X>, ObjectT<X>>
-        union<X>(list: readonly X[]): Schema<TypeS<X>, TypeT<X>>
-        intersect<X>(list: readonly X[]): Schema<IntersectS<X>, IntersectT<X>>
-        transform<X, T>(inner: X, callback: (value: TypeS<X>) => T, preserve?: boolean): Schema<TypeS<X>, T>
-    }
-    export interface Base<T = any> {
-        uid: number
-        meta: Meta<T>
-        type: string
-        sKey?: Schema
-        inner?: Schema
-        list?: Schema[]
-        dict?: Dict<Schema>
-        bits?: Dict<number>
-        callback?: Function
-        value?: T
-        refs?: Dict<Schema>
-        preserve?: boolean
-        toString(inline?: boolean): string
-    }
-
-    export interface Meta<T = any> {
-        default?: T extends {} ? Partial<T> : T
-        required?: boolean
-        hidden?: boolean
-        role?: string
-        link?: string
-        description?: string
-        comment?: string
-        pattern?: { source: string, flags?: string }
-        max?: number
-        min?: number
-        step?: number
-    }
-}
-
-declare module globalThis {
-    export let __schemaKey__: number
-}
-
-globalThis.__schemaKey__ ??= 0
-
-export const Schema = function (options: Schema.Base) {
-    const schema = function (data: any) {
-        return Schema.resolve(data, schema)[0]
-    } as Schema
-
-    if (options.refs) {
-        const refs = valueMap(options.refs, options => new Schema(options))
-        const getRef = (uid: any) => refs[uid]!
-        for (const key in refs) {
-            const options = refs[key]!
-            options.sKey = getRef(options.sKey)
-            options.inner = getRef(options.inner)
-            options.list = options.list && options.list.map(getRef)
-            options.dict = options.dict && valueMap(options.dict, getRef)
-        }
-        return refs[options.uid!]
-    }
-
-    Object.assign(schema, options)
-    Object.defineProperty(schema, 'uid', { value: globalThis.__schemaKey__++ })
-    Object.setPrototypeOf(schema, Schema.prototype)
-    schema.meta ||= {}
-    schema.toString = schema.toString.bind(schema)
-    return schema
-} as Schema.Static
-
-interface Schema<S = any, T = S> extends Schema.Base<T> {
-    (data?: S | null): T
-    new (data?: S | null): T
-    [SchemaKey]: true
-    toJSON(): Schema.Base<T>
-    required(value?: boolean): Schema<S, T>
-    hidden(value?: boolean): Schema<S, T>
-    role(text: string): Schema<S, T>
-    link(link: string): Schema<S, T>
-    default(value: T): Schema<S, T>
-    comment(text: string): Schema<S, T>
-    description(text: string): Schema<S, T>
-    pattern(regexp: RegExp): Schema<S, T>
-    max(value: number): Schema<S, T>
-    min(value: number): Schema<S, T>
-    step(value: number): Schema<S, T>
-    set(key: string, value: Schema): Schema<S, T>
-    push(value: Schema): Schema<S, T>
-    simplify(value?: any): any
-}
-
-Schema.prototype = Object.create(Function.prototype)
-
-Schema.prototype[SchemaKey] = true
-
-let refs: Record<number, Schema> | undefined
-
-Schema.prototype.toJSON = function toJSON() {
-    if (refs) {
-        refs[this.uid] ??= JSON.parse(JSON.stringify({ ...this }))
-        return this.uid as any
-    }
-
-    refs = { [this.uid]: { ...this } as Schema }
-    refs[this.uid] = JSON.parse(JSON.stringify({ ...this }))
-    const result = { uid: this.uid, refs }
-    refs = undefined
-    return result
-}
-
-Schema.prototype.set = function set(key, value) {
-    this.dict![key] = value
-    return this
-}
-
-Schema.prototype.push = function push(value) {
-    this.list!.push(value)
-    return this
-}
-
-for (const key of ['required', 'hidden']) {
-    Object.assign(Schema.prototype, {
-        [key](this: Schema, value = true) {
-            const schema = Schema(this)
-            schema.meta = { ...schema.meta, [key]: value }
-            return schema
-        },
-    })
-}
-
-Schema.prototype.pattern = function pattern(regexp) {
-    const schema = Schema(this)
-    const pattern = pick(regexp, ['source', 'flags'])
-    schema.meta = { ...schema.meta, pattern }
-    return schema
-}
-
-Schema.prototype.simplify = function simplify(this: Schema, value) {
-    if (deepEqual(value, this.meta.default)) return null
-    if (this.type === 'object' || this.type === 'dict') {
-        const result: Dict = {}
-        for (const key in value) {
-            const schema = this.type === 'object' ? this.dict![key] : this.inner
-            const item = schema?.simplify(value[key])
-            if (!isNullable(item)) result[key] = item
-        }
-        return result
-    } else if (this.type === 'array' || this.type === 'tuple') {
-        const result: any[] = []
-        for (const key of value) {
-            const schema = this.type === 'array' ? this.inner : this.list![key]
-            const item = schema ? schema.simplify(value[key]) : value[key]
-            result.push(item)
-        }
-        return result
-    } else if (this.type === 'intersect') {
-        const result: Dict = {}
-        for (const item of this.list!) {
-            Object.assign(result, item.simplify(value))
-        }
-        return result
-    } else if (this.type === 'union') {
-        for (const schema of this.list!) {
-            try {
-                Schema.resolve(value, schema)
-                return schema.simplify(value)
-            } catch {}
-        }
-    }
-    return value
-}
-
-Schema.prototype.toString = function toString(this: Schema, inline?: boolean) {
-    return formatters[this.type]?.(this, inline) ?? (console.log(this), `Schema<${this.type}>`)
-}
-
-for (const key of ['default', 'role', 'link', 'comment', 'description', 'max', 'min', 'step']) {
-    Object.assign(Schema.prototype, {
-        [key](this: Schema, value: any) {
-            const schema = Schema(this)
-            schema.meta = { ...schema.meta, [key]: value }
-            return schema
-        },
-    })
-}
-
-const resolvers: Dict<Schema.Resolve> = {}
-
-Schema.extend = function extend(type: string, resolve) {
-    resolvers[type] = resolve
-}
-
-Schema.resolve = function resolve(data, schema, strict) {
-    if (!schema) return [data]
-
-    if (isNullable(data)) {
-        if (schema.meta.required) throw new TypeError(`missing required value`)
-        const fallback = schema.meta.default
-        if (isNullable(fallback)) return [data]
-        data = deepClone(fallback)
-    }
-
-    const callback = resolvers[schema.type]
-    if (callback) return callback(data, schema, strict)
-    throw new TypeError(`unsupported type "${schema.type}"`)
-}
-
-Schema.from = function from(source: any) {
-    if (isNullable(source)) {
-        return Schema.any()
-    } else if (['string', 'number', 'boolean'].includes(typeof source)) {
-        return Schema.const(source).required()
-    } else if (source[SchemaKey]) {
-        return source
-    } else if (typeof source === 'function') {
-        switch (source) {
-            case String: return Schema.string().required()
-            case Number: return Schema.number().required()
-            case Boolean: return Schema.boolean().required()
-            case Function: return Schema.function().required()
-            default: return Schema.is(source).required()
-        }
-    } else {
-        throw new TypeError(`cannot infer schema from ${source}`)
-    }
-}
-
-Schema.natural = function natural() {
-    return Schema.number().step(1).min(0)
-}
-
-Schema.percent = function percent() {
-    return Schema.number().step(0.01).min(0).max(1).role('slider')
-}
-
-Schema.date = function date() {
-    return Schema.union([
-        Schema.is(Date),
-        Schema.transform(Schema.string().role('datetime'), (value) => {
-            const date = new Date(value)
-            if (isNaN(+date)) throw new TypeError(`invalid date "${value}"`)
-            return date
-        }, true),
-    ])
-}
-
-Schema.extend('any', (data) => {
-    return [data]
-})
-
-Schema.extend('never', (data) => {
-    throw new TypeError(`expected nullable but got ${data}`)
-})
-
-Schema.extend('const', (data, { value }) => {
-    if (data === value) return [value]
-    throw new TypeError(`expected ${value} but got ${data}`)
-})
-
-function checkWithinRange(data: number, meta: Schema.Meta<any>, description: string) {
-    const { max = Infinity, min = -Infinity } = meta
-    if (data > max) throw new TypeError(`expected ${description} <= ${max} but got ${data}`)
-    if (data < min) throw new TypeError(`expected ${description} >= ${min} but got ${data}`)
-}
-
-Schema.extend('string', (data, { meta }) => {
-    if (typeof data !== 'string') throw new TypeError(`expected string but got ${data}`)
-    if (meta.pattern) {
-        const regexp = new RegExp(meta.pattern.source, meta.pattern.flags)
-        if (!regexp.test(data)) throw new TypeError(`expect string to match regexp ${regexp}`)
-    }
-    checkWithinRange(data.length, meta, 'string length')
-    return [data]
-})
-
-Schema.extend('number', (data, { meta }) => {
-    if (typeof data !== 'number') throw new TypeError(`expected number but got ${data}`)
-    checkWithinRange(data, meta, 'number')
-    const { step } = meta
-    if (step) {
-        const quotient = Math.abs(data - (meta.min ?? 0)) % step
-        if (quotient >= Number.EPSILON && quotient < step - Number.EPSILON) {
-            throw new TypeError(`expected number multiple of ${step} but got ${data}`)
-        }
-    }
-    return [data]
-})
-
-Schema.extend('boolean', (data) => {
-    if (typeof data === 'boolean') return [data]
-    throw new TypeError(`expected boolean but got ${data}`)
-})
-
-Schema.extend('bitset', (data, { bits }) => {
-    if (typeof data === 'number') return [data]
-    if (!Array.isArray(data)) throw new TypeError(`expected array but got ${data}`)
-    let result = 0
-    for (const value of data) {
-        if (typeof value !== 'string') throw new TypeError(`expected string but got ${value}`)
-        if (!(value in bits!)) throw new TypeError(`unknown value ${value}`)
-        result |= bits![value]!
-    }
-    return [result, result]
-})
-
-Schema.extend('function', (data) => {
-    if (typeof data === 'function') return [data]
-    throw new TypeError(`expected function but got ${data}`)
-})
-
-Schema.extend('is', (data, { callback }) => {
-    if (data instanceof callback!) return [data]
-    throw new TypeError(`expected ${callback!.name} but got ${data}`)
-})
-
-function property(data: any, key: keyof any, schema: Schema) {
-    const [value, adapted] = Schema.resolve(data[key], schema)
-    if (!isNullable(adapted)) data[key] = adapted
-    return value
-}
-
-Schema.extend('array', (data, { inner, meta }) => {
-    if (!Array.isArray(data)) throw new TypeError(`expected array but got ${data}`)
-    checkWithinRange(data.length, meta, 'array length')
-    return [data.map((_, index) => property(data, index, inner!))]
-})
-
-Schema.extend('dict', (data, { inner, sKey }, strict) => {
-    if (!isPlainObject(data)) throw new TypeError(`expected object but got ${data}`)
-    const result: any = {}
-    for (const key in data) {
-        let rKey: string
-        try {
-            rKey = Schema.resolve(key, sKey!)[0]
-        } catch (error) {
-            if (strict) continue
-            throw error
-        }
-        result[rKey] = property(data, key, inner!)
-        data[rKey] = data[key]
-        if (key !== rKey) delete data[key]
-    }
-    return [result]
-})
-
-Schema.extend('tuple', (data, { list }, strict) => {
-    if (!Array.isArray(data)) throw new TypeError(`expected array but got ${data}`)
-    const result = list!.map((inner, index) => property(data, index, inner))
-    if (strict) return [result]
-    result.push(...data.slice(list!.length))
-    return [result]
-})
-
-function merge(result: any, data: any) {
-    for (const key in data) {
-        if (key in result) continue
-        result[key] = data[key]
-    }
-}
-
-Schema.extend('object', (data, { dict }, strict) => {
-    if (!isPlainObject(data)) throw new TypeError(`expected object but got ${data}`)
-    const result: any = {}
-    for (const key in dict) {
-        const value = property(data, key, dict![key]!)
-        if (!isNullable(value) || key in data) {
-            result[key] = value
-        }
-    }
-    if (!strict) merge(result, data)
-    return [result]
-})
-
-Schema.extend('union', (data, { list, toString }) => {
-    const messages: string[] = []
-    for (const inner of list!) {
-        try {
-            return Schema.resolve(data, inner)
-        } catch (error) {
-            // messages.push(error.message)
-        }
-    }
-    throw new TypeError(`expected ${toString()} but got ${JSON.stringify(data)}`)
-})
-
-Schema.extend('intersect', (data, { list, toString }, strict) => {
-    let result
-    for (const inner of list!) {
-        const value = Schema.resolve(data, inner, true)[0]
-        if (isNullable(value)) continue
-        if (isNullable(result)) {
-            result = value
-        } else if (typeof result !== typeof value) {
-            throw new TypeError(`expected ${toString()} but got ${JSON.stringify(data)}`)
-        } else if (typeof value === 'object') {
-            result = { ...result as any, ...value }
-        } else if (result !== value) {
-            throw new TypeError(`expected ${toString()} but got ${JSON.stringify(data)}`)
-        }
-    }
-    if (!strict && isPlainObject(data)) merge(result, data)
-    return [result]
-})
-
-Schema.extend('transform', (data, { inner, callback, preserve }) => {
-    const [result, adapted = data] = Schema.resolve(data, inner!, true)
-    if (isPlainObject(data)) {
-        const temp: any = {}
-        for (const key in result) {
-            if (!(key in data)) continue
-            temp[key] = data[key]
-            delete data[key]
-        }
-        Object.assign(data, callback!(temp))
-        return [callback!(result)]
-    } else if (preserve) {
-        return [callback!(result)]
-    } else {
-        return [callback!(result), callback!(adapted)]
-    }
-})
-
-type Formatter = (schema: Schema, inline?: boolean) => string
-const formatters: Dict<Formatter> = {}
-
-function defineMethod(name: string, keys: (keyof Schema.Base)[], format: Formatter) {
-    formatters[name] = format
-    Object.assign(Schema, {
-        [name](...args: any[]) {
-            const schema = new Schema({ type: name } as Schema.Base)
-            keys.forEach((key, index) => {
-                switch (key) {
-                    case 'sKey': schema.sKey = args[index] ?? Schema.string(); break
-                    case 'inner': schema.inner = Schema.from(args[index]); break
-                    case 'list': schema.list = args[index].map(Schema.from); break
-                    case 'dict': schema.dict = valueMap(args[index], Schema.from); break
-                    case 'bits': {
-                        schema.bits = {}
-                        for (const key in args[index]) {
-                            if (typeof args[index][key] !== 'number') continue
-                            schema.bits[key] = args[index][key]
-                        }
-                        break
-                    }
-                    default: schema[key] = args[index] as never
-                }
-            })
-            if (name === 'object' || name === 'dict') {
-                schema.meta.default = {}
-            } else if (name === 'array' || name === 'tuple') {
-                schema.meta.default = []
-            } else if (name === 'bitset') {
-                schema.meta.default = 0
+export class Schema<S = any,T=S> {
+    constructor(
+        public meta: Schema.Meta<S,T>,
+        public options: Schema.Options = {},
+    ) {
+        const _this = this;
+        const schema=function (value?:S){
+            const formatter = Schema.resolve(_this.meta.type);
+            return formatter.call(_this,value);
+        } as Schema<S,T>;
+        return new Proxy(schema, {
+            get(target, p: string | symbol, receiver: any): any {
+                return Reflect.get(_this,p,receiver)
+            },
+            set(target, p: string | symbol, value: any, receiver: any): boolean {
+                return Reflect.set(_this,p,value,receiver)
             }
-            return schema
-        },
-    })
+        })
+    }
+
+    required(required?: boolean): this {
+        this.meta.required = !!required;
+        return this;
+    }
+    description(description: string): this {
+        this.meta.description = description;
+        return this;
+    }
+    component(component: string): this {
+        this.meta.component = component;
+        return this;
+    }
+    default(defaultValue: T extends {} ? Partial<T> : T|(()=>T)): this {
+        this.meta.default = defaultValue;
+        return this;
+    }
+
+    min(min: number): this {
+        this.meta.min = min;
+        return this;
+    }
+
+    max(max: number): this {
+        this.meta.max = max;
+        return this;
+    }
+
+    step(step: number): this {
+        this.meta.step = step;
+        return this;
+    }
+
+    static number(key?: string): Schema<number> {
+        return new Schema<number>({ key, type: "number" });
+    }
+
+    static percent(key?: string): Schema<number> {
+        return new Schema<number>({ key, type: "percent" })
+            .component("slider")
+            .min(0)
+            .max(1)
+            .step(0.01);
+    }
+    static string(key?: string): Schema<string> {
+        return new Schema<string>({ key, type: "string" });
+    }
+
+    static boolean(key?: string): Schema<boolean> {
+        return new Schema<boolean>({ key, type: "boolean" });
+    }
+    static regexp(key?: string) {
+        return new Schema<RegExp | string,RegExp>({ key, type: "regexp" });
+    }
+    static date(key?: string) {
+        return new Schema<Date | number,Date>({ key, type: "date" }).component("date-picker");
+    }
+
+    static dict<X extends Schema>(inner: X, key?: string) {
+        return new Schema<Schema.Dict<X>>({ key: key, type: "dict" }, { inner });
+    }
+    static array<X extends Schema>(inner: X, key?: string) {
+        return new Schema<Schema.Types<X>[]>({ key: key, type: "array" }, { inner });
+    }
+    static object<X extends Schema.DictSchema>(dict: X, key?: string) {
+        return new Schema<Schema.Object<X>>({ key: key, type: "object" }, { dict });
+    }
+    static tuple<X extends readonly any[]>(list: X, key?: string): Schema<Schema.Tuple<X>> {
+        return new Schema<Schema.Tuple<X>>({ key: key, type: "tuple" }, { list });
+    }
+    static union<X extends readonly Schema[]>(list: X, key?: string) {
+        return new Schema<Schema.Types<X[number]>>({ key: key, type: "union" }, { list });
+    }
+    static const<X extends string | number | boolean>(value: X, key?: string) {
+        return new Schema<X>({ key: key, type: "const", default: value as any });
+    }
+    static resolve<T extends string>(type: T): Schema.Formatter {
+        return Schema.formatters.get(type);
+    }
+    static extend<T extends string>(type: T, formatter: Schema.Formatter) {
+        Schema.formatters.set(type, formatter);
+    }
 }
-
-defineMethod('is', ['callback'], ({ callback }) => callback!.name)
-defineMethod('any', [], () => 'any')
-defineMethod('never', [], () => 'never')
-defineMethod('const', ['value'], ({ value }) => typeof value === 'string' ? JSON.stringify(value) : value)
-defineMethod('string', [], () => 'string')
-defineMethod('number', [], () => 'number')
-defineMethod('boolean', [], () => 'boolean')
-defineMethod('bitset', ['bits'], () => 'bitset')
-defineMethod('function', [], () => 'function')
-defineMethod('array', ['inner'], ({ inner }) => `${inner!.toString(true)}[]`)
-defineMethod('dict', ['inner', 'sKey'], ({ inner, sKey }) => `{ [key: ${sKey!.toString()}]: ${inner!.toString()} }`)
-defineMethod('tuple', ['list'], ({ list }) => `[${list!.map((inner) => inner.toString()).join(', ')}]`)
-
-defineMethod('object', ['dict'], ({ dict }) => {
-    if (Object.keys(dict!).length === 0) return '{}'
-    return `{ ${Object.entries(dict!).map(([key, inner]) => {
-        return `${key}${inner!.meta.required ? '' : '?'}: ${inner!.toString()}`
-    }).join(', ')} }`
+export interface Schema<S = any> {
+    (value?: S): S;
+}
+export namespace Schema {
+    export function checkDefault<T>(schema: Schema, value: T,fallback:T=value) {
+        if (typeof value === "undefined") {
+            if (typeof schema.meta.default === "function") {
+                value = schema.meta.default();
+            } else {
+                value = schema.meta.default||fallback;
+            }
+        }
+        if(schema.meta.required && typeof value === 'undefined') throw new Error(`${schema.meta.key||'value'} is required`)
+        return value;
+    }
+    export const formatters: Map<string, Formatter> = new Map<string, Formatter>();
+    export type Formatter<S=any,T=S> = (this: Schema, value: S) => T;
+    export interface Meta<S = any,T=S> {
+        key?: string;
+        type?: string;
+        default?: T extends {} ? Partial<T> : T|(()=>T);
+        required?: boolean;
+        description?: string;
+        component?: string;
+        min?: number;
+        max?: number;
+        step?: number;
+    }
+    export interface Options {
+        dict?: Record<string, Schema>;
+        inner?: Schema;
+        list?: readonly Schema[];
+    }
+    export type Types<T> = T extends Schema<infer S,infer T> ? T : never;
+    export type Dict<T> = {
+        [key:string]: Partial<Types<T>>;
+    } & Record<string, any>;
+    export type DictSchema = Record<string, Schema>
+    export type Object<X extends DictSchema>={
+        [K in keyof X]: Types<X[K]>;
+    }
+    export type Tuple<X extends readonly any[]> = X extends readonly [infer L, ...infer R]
+        ? [Types<L>, ...Tuple<R>]
+        : [];
+}
+Schema.extend("number", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value);
+    if(this.meta.max && value>this.meta.max) throw new Error(`${this.meta.key||'value'} is too large`);
+    if(this.meta.min && value<this.meta.min) throw new Error(`${this.meta.key||'value'} is too small`);
+    return value;
+});
+Schema.extend("string", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value);
+    if(this.meta.max && value?.length>this.meta.max) throw new Error(`${this.meta.key||'value'} is too long`);
+    if(this.meta.min && value?.length<this.meta.min) throw new Error(`${this.meta.key||'value'} is too short`);
+    return value;
+});
+Schema.extend("boolean", function (this: Schema, value: any) {
+    return Schema.checkDefault(this,value);
+});
+Schema.extend("dict", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value,{});
+    return Object.fromEntries(Object.entries(value).map(([key, schema]) => {
+        return [key, this.options.inner(value[key])];
+    }));
+});
+Schema.extend("array", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value,[]);
+    return value.map((item: any) => this.options.inner(item));
 })
-
-defineMethod('union', ['list'], ({ list }, inline) => {
-    const result = list!.map(({ toString: format }) => format()).join(' | ')
-    return inline ? `(${result})` : result
+Schema.extend("object", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value,{});
+    return Object.fromEntries(Object.entries(this.options.dict).map(([key, schema]) => {
+        return [key, schema(value[key])];
+    }));
+});
+Schema.extend("tuple", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value,[]);
+    return value.map((item: any, index: number) => this.options.list[index](item));
+});
+Schema.extend("union", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value,[]);
+    for (const schema of this.options.list) {
+        try {
+            return schema(value);
+        } catch (e) {}
+    }
+    throw new Error("union type not match");
+});
+Schema.extend("regexp", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value);
+    if (typeof value === "string") {
+        return new RegExp(value);
+    }
+    return value;
 })
-
-defineMethod('intersect', ['list'], ({ list }) => {
-    return `${list!.map((inner) => inner.toString(true)).join(' & ')}`
+Schema.extend("date", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value);
+    return new Date(value);
 })
-
-defineMethod('transform', ['inner', 'callback', 'preserve'], ({ inner }, isInner) => inner!.toString(isInner))
+Schema.extend("const", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value);
+    if (value !== this.meta.default) {
+        throw new Error("const value not match");
+    }
+    return value;
+})
+Schema.extend("percent", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value);
+    return value;
+})
