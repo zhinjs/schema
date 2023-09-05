@@ -139,7 +139,7 @@ export namespace Schema {
     } & Record<string, any>;
     export type DictSchema = Record<string, Schema>
     export type Object<X extends DictSchema>={
-        [K in keyof X]: Types<X[K]>;
+        [K in keyof X]?: Types<X[K]>;
     }
     export type Tuple<X extends readonly any[]> = X extends readonly [infer L, ...infer R]
         ? [Types<L>, ...Tuple<R>]
