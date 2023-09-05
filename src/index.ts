@@ -261,4 +261,3 @@ Schema.extend("percent", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value);
     return value;
 })
-module.exports=Schema
