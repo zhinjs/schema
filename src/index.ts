@@ -1,4 +1,5 @@
 export class Schema<S = any,T=S> {
+    public [Symbol.toStringTag] = 'ZhinSchema'
     constructor(
         public meta: Schema.Meta<S,T>,
         public options: Schema.Options = {},
