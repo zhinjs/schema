@@ -23,25 +23,25 @@ Schema.regexp()
 ## 声明object
 1. Record<string,string>
 ```javascript
-Schema.object(
+Schema.dict(
     Schema.string()
 )
 ```
 2. Record<string,number>
 ```javascript
-Schema.object(
+Schema.dict(
     Schema.number()
 )
 ```
 3. Record<string,Date>
 ```javascript
-Schema.object(
+Schema.dict(
     Schema.date()
 )
 ```
 4. Record<string,number[]>
 ```javascript
-Schema.object(
+Schema.dict(
     Schema.list(
         Schema.number()
     )
@@ -49,7 +49,7 @@ Schema.object(
 ```
 5. Record<string,{foo:string,bar:number[]}[]>
 ```javascript
-Schema.object(
+Schema.dict(
     Schema.list(
         Schema.object({
             foo:Schema.string(),
