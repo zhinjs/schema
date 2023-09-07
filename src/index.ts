@@ -19,10 +19,13 @@ export class Schema<S = any,T=S> {
         })
     }
     toJSON(){
-        return {
+        return Object.fromEntries(Object.entries({
             ...this.meta,
-            default:typeof this.meta.default === 'function' ? this.meta.default() : this.meta.default
-        };
+            default:typeof this.meta.default === 'function' ? this.meta.default() : this.meta.default,
+            inner:this.options.inner?.toJSON(),
+            list:this.options.list?.map(item=>item.toJSON()),
+            dict:this.options.dict?Object.fromEntries(Object.entries(this.options.dict||{}).map(([key,value])=>[key,value.toJSON()])):undefined,
+        }).filter(([key,value])=>typeof value !== 'undefined'))
     }
     [Symbol.unscopables](){
         return {
@@ -116,6 +119,12 @@ export class Schema<S = any,T=S> {
     static const<X extends string | number | boolean>(value: X, key?: string) {
         return new Schema<X>({ key: key, type: "const", default: value as any });
     }
+    static any(key?:string){
+        return new Schema<any>({key,type:'any'})
+    }
+    static never(key?:string){
+        return new Schema<never>({key,type:'never'})
+    }
     static resolve<T extends string>(type: T): Schema.Formatter {
         return Schema.formatters.get(type);
     }
@@ -179,10 +188,10 @@ export namespace Schema {
         if(schema.meta.required && typeof value === 'undefined') throw new Error(`${schema.meta.key||'value'} is required`)
         return value;
     }
-    export type Option<T=any>=T|{
-        label:string
-        value:T
-    }
+    export type Option<T=any>=T extends Array<infer R>?R|{
+        label:string,
+        value:R
+    }:T
     export function formatOptionList<T>(list: Schema.Option<T>[]) {
         return list.map(item => {
             if (typeof item === "string") {
