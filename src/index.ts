@@ -225,7 +225,6 @@ export namespace Schema {
                     break;
                 case "regexp":
                     if(!['string','undefined'].includes(typeof value) && !(value instanceof RegExp)) throw new TypeError(`${schema.meta.key||'value'} is not a RegExp|string`)
-                    if(value instanceof RegExp && !value.test('')) throw new TypeError(`${schema.meta.key||'value'} is not a valid RegExp`)
                     break;
                 case "date":
                     if(!['number','undefined'].includes(typeof value) && !(value instanceof Date)) throw new TypeError(`${schema.meta.key||'value'} is not a Date|number`)
@@ -345,6 +344,23 @@ Schema.extend("regexp", function (this: Schema, value: any) {
     if (typeof value === "string") {
         return new RegExp(value);
     }
+    return value;
+})
+Schema.extend("intersect", function (this: Schema, value: any) {
+    value=Schema.checkDefault(this,value,[]);
+    for (const schema of this.options.list) {
+        try {
+            value = schema(value);
+        } catch (e) {
+            throw new Error("intersect type not match");
+        }
+    }
+    return value;
+})
+Schema.extend('never',function (this: Schema, value: any) {
+    throw new Error('never type not match')
+})
+Schema.extend("any", function (this: Schema, value: any) {
     return value;
 })
 Schema.extend("date", function (this: Schema, value: any) {

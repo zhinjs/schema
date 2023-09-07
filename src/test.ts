@@ -6,7 +6,7 @@ const num = Schema.number().default(123)(456)
 console.log(num)
 const bool = Schema.boolean().default(false)(true)
 console.log(bool)
-const reg = Schema.regexp().default(/123/)(/456/)
+const reg = Schema.regexp().default(/123/)()
 console.log(reg)
 const date = Schema.date().default(new Date())(new Date().getTime() + 1000 * 60 * 60 * 24)
 console.log(date)
@@ -43,10 +43,10 @@ const intersect=Schema.intersect([
 ] as const)('123')
 console.log(intersect)
 const formatter = Schema.dict(
-    Schema.array(
+    Schema.list(
         Schema.object({
             foo: Schema.string().option(['1','3']),
-            bar: Schema.array(Schema.number()).default([123]).option([
+            bar: Schema.list(Schema.number()).default([123]).option([
                 {
                     label: '123',
                     value: 123
