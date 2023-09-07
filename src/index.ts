@@ -7,6 +7,7 @@ export class Schema<S = any,T=S> {
         const _this = this;
         const schema=function (value?:S){
             const formatter = Schema.resolve(_this.meta.type);
+            if(!formatter) throw new Error(`type ${_this.meta.type} not found`)
             return formatter.call(_this,value);
         } as Schema<S,T>;
         return new Proxy(schema, {
@@ -17,6 +18,14 @@ export class Schema<S = any,T=S> {
                 return Reflect.set(_this,p,value,receiver)
             }
         })
+    }
+    static fromJSON<S,T>(json:Schema.JSON<S,T>){
+        const {dict,inner,list,...meta}=json
+        const options:Schema.Options={}
+        if(dict) options.dict=Object.fromEntries(Object.entries(dict).map(([key,value])=>[key,Schema.fromJSON(value)]))
+        if(inner) options.inner=Schema.fromJSON(inner)
+        if(list) options.list=list.map(item=>Schema.fromJSON(item))
+        return new Schema<S,T>(meta,options)
     }
     toJSON(){
         return Object.fromEntries(Object.entries({
@@ -60,7 +69,7 @@ export class Schema<S = any,T=S> {
     }
     /** 设置是否允许多选 */
     multiple(): this {
-        if(this.meta.type!=='array') throw new Error('multiple only support array type')
+        if(this.meta.type!=='list') throw new Error('multiple only support list type')
         this.meta.multiple=true
         return this
     }
@@ -113,7 +122,7 @@ export class Schema<S = any,T=S> {
     }
     /** 声明一个列表类型 */
     static list<X extends Schema>(inner: X, key?: string) {
-        return new Schema<Schema.Types<X>[]>({ key: key, type: "array" }, { inner });
+        return new Schema<Schema.Types<X>[]>({ key: key, type: "list" }, { inner });
     }
     /**
      * 声明一个数组类型
@@ -123,7 +132,7 @@ export class Schema<S = any,T=S> {
         return Schema.list(inner, key)
     }
     /** 声明一个对象类型 */
-    static object<X extends Schema.DictSchema>(dict: X, key?: string) {
+    static object<X extends {}>(dict: X, key?: string) {
         return new Schema<Schema.Object<X>>({ key: key, type: "object" }, { dict });
     }
     /** 声明一个元组类型 */
@@ -163,6 +172,11 @@ export interface Schema<S = any> {
 export namespace Schema {
     export const formatters: Map<string, Formatter> = new Map<string, Formatter>();
     export type Formatter<S=any,T=S> = (this: Schema, value: S) => T;
+    export type JSON<S=any,T=S>= Meta<S,T> & {
+        dict?:Record<string, JSON>
+        inner?:JSON
+        list?:JSON[]
+    }
     export interface Meta<S = any,T=S> {
         key?: string;
         type?: string;
@@ -188,7 +202,7 @@ export namespace Schema {
         [key:string]: Partial<Types<T>>;
     } & Record<string, any>;
     export type DictSchema = Record<string, Schema>
-    export type Object<X extends DictSchema>={
+    export type Object<X extends {}>={
         [K in keyof X]?: Types<X[K]>;
     }
     export type Tuple<X extends readonly any[]> = X extends readonly [infer L, ...infer R]
@@ -234,9 +248,9 @@ export namespace Schema {
                 case "dict":
                     if(!['object','undefined','null'].includes(typeof value)) throw new TypeError(`${schema.meta.key||'value'} is not a object`)
                     break;
-                case 'list':
                 case "array":
-                    if(typeof value !== 'undefined' && !Array.isArray(value)) throw new TypeError(`${schema.meta.key||'value'} is not a array`)
+                case 'list':
+                    if(typeof value !== 'undefined' && !Array.isArray(value)) throw new TypeError(`${schema.meta.key||'value'} is not a list`)
                     break;
                 case "tuple":
                     if(typeof value !== 'undefined' && !Array.isArray(value)) throw new TypeError(`${schema.meta.key||'value'} is not a valid tuple`)
@@ -316,7 +330,7 @@ Schema.extend("dict", function (this: Schema, value: any) {
         return [key, this.options.inner(value[key])];
     }));
 });
-Schema.extend("array", function (this: Schema, value: any) {
+Schema.extend("list", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value,[]);
     return value.map((item: any) => this.options.inner(item));
 })

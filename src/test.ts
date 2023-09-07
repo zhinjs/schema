@@ -20,7 +20,7 @@ const dict = Schema.dict(Schema.object({
     zs: {}
 })
 console.log(dict)
-const arr = Schema.array(Schema.object({
+const arr = Schema.list(Schema.object({
     name: Schema.string().default('123'),
     age: Schema.number().default(123)
 }))()
@@ -31,17 +31,20 @@ const obj = Schema.object({
 })()
 console.log(obj)
 const tuple = Schema.tuple([
-    Schema.string(),
-    Schema.number()
-] as const).default(['123', 123])()
+    Schema.const('123'),
+    Schema.const(123)
+] as const)()
 console.log(tuple)
-const union = Schema.union([Schema.string().default('123'), Schema.number().default(123)] as const)()
+const union = Schema.union([
+    Schema.string().default('123'),
+    Schema.number().default(123)
+] as const)()
 console.log(union)
 const intersect=Schema.intersect([
     Schema.const('123'),
-    Schema.string()
+    Schema.string(),
 ] as const)('123')
-console.log(intersect)
+console.log('intersect',intersect)
 const formatter = Schema.dict(
     Schema.list(
         Schema.object({
@@ -61,4 +64,19 @@ const params = formatter({
     ]
 })
 console.log(JSON.stringify(formatter, null, 2), params)
+const json={
+    type:'object',
+    dict:{
+        foo:{
+            type:'string',
+            default:'123',
+        },
+        bar:{
+            type:'number',
+            default:123
+        }
+    }
+}
+const schema=Schema.fromJSON(json)
+console.log(schema({foo:'456'}))
 
