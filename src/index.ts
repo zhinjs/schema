@@ -33,50 +33,57 @@ export class Schema<S = any,T=S> {
             meta:true
         }
     }
+    /** 设置是否必填 */
     required(required?: boolean): this {
         this.meta.required = !!required;
         return this;
     }
+    /** 设置描述 */
     description(description: string): this {
         this.meta.description = description;
         return this;
     }
+    /** 设置渲染组件 */
     component(component: string): this {
         this.meta.component = component;
         return this;
     }
+    /** 设置默认值 */
     default(defaultValue: T extends {} ? Partial<T> : T|(()=>T)): this {
         this.meta.default = defaultValue;
         return this;
     }
+    /** 设置选项列表 */
     option(list: Schema.Option<T>[]): this {
         this.meta.options=Schema.formatOptionList(list)
         return this
     }
+    /** 设置是否允许多选 */
     multiple(): this {
         if(this.meta.type!=='array') throw new Error('multiple only support array type')
         this.meta.multiple=true
         return this
     }
+    /** 设置数值最小值，类型是string时，标识最小长度 */
     min(min: number): this {
         this.meta.min = min;
         return this;
     }
-
+    /** 设置数值最大值，类型是string时，标识最大长度 */
     max(max: number): this {
         this.meta.max = max;
         return this;
     }
-
+    /** 设置百分比步长 */
     step(step: number): this {
         this.meta.step = step;
         return this;
     }
-
+    /** 声明一个数字类型 */
     static number(key?: string): Schema<number> {
         return new Schema<number>({ key, type: "number" });
     }
-
+    /** 声明一个百分比类型 */
     static percent(key?: string): Schema<number> {
         return new Schema<number>({ key, type: "percent" })
             .component("slider")
@@ -84,44 +91,62 @@ export class Schema<S = any,T=S> {
             .max(1)
             .step(0.01);
     }
+    /** 声明一个字符串类型 */
     static string(key?: string): Schema<string> {
         return new Schema<string>({ key, type: "string" });
     }
-
+    /** 声明一个布尔类型 */
     static boolean(key?: string): Schema<boolean> {
         return new Schema<boolean>({ key, type: "boolean" });
     }
+    /** 声明一个正则类型 */
     static regexp(key?: string) {
         return new Schema<RegExp | string,RegExp>({ key, type: "regexp" });
     }
+    /** 声明一个日期类型 */
     static date(key?: string) {
         return new Schema<Date | number,Date>({ key, type: "date" }).component("date-picker");
     }
-
+    /** 声明一个字典类型 */
     static dict<X extends Schema>(inner: X, key?: string) {
         return new Schema<Schema.Dict<X>>({ key: key, type: "dict" }, { inner });
     }
+    /** 声明一个列表类型 */
     static list<X extends Schema>(inner: X, key?: string) {
         return new Schema<Schema.Types<X>[]>({ key: key, type: "array" }, { inner });
     }
+    /**
+     * 声明一个数组类型
+     * @deprecated use list instead
+     * */
     static array<X extends Schema>(inner: X, key?: string) {
         return Schema.list(inner, key)
     }
+    /** 声明一个对象类型 */
     static object<X extends Schema.DictSchema>(dict: X, key?: string) {
         return new Schema<Schema.Object<X>>({ key: key, type: "object" }, { dict });
     }
+    /** 声明一个元组类型 */
     static tuple<X extends readonly any[]>(list: X, key?: string): Schema<Schema.Tuple<X>> {
         return new Schema<Schema.Tuple<X>>({ key: key, type: "tuple" }, { list });
     }
-    static union<X extends readonly Schema[]>(list: X, key?: string) {
-        return new Schema<Schema.Types<X[number]>>({ key: key, type: "union" }, { list });
+    /** 声明一个联合类型 */
+    static union<X extends readonly any[]>(list: X, key?: string) {
+        return new Schema<Schema.Union<X>>({ key: key, type: "union" }, { list });
     }
+    /** 声明一个交叉类型 */
+    static intersect<X extends readonly any[]>(list: X, key?: string) {
+        return new Schema<Schema.Intersect<X>>({ key: key, type: "intersect" }, { list });
+    }
+    /** 声明一个常量 */
     static const<X extends string | number | boolean>(value: X, key?: string) {
         return new Schema<X>({ key: key, type: "const", default: value as any });
     }
+    /** 声明一个任意类型 */
     static any(key?:string){
         return new Schema<any>({key,type:'any'})
     }
+    /** 声明一个空类型 */
     static never(key?:string){
         return new Schema<never>({key,type:'never'})
     }
@@ -157,6 +182,8 @@ export namespace Schema {
         list?: readonly Schema[];
     }
     export type Types<T> = T extends Schema<infer S,infer T> ? T : never;
+    export type Union<T extends readonly any[]>= T extends readonly [infer L,...infer R]?Types<L>|Union<R>:never
+    export type Intersect<T extends readonly any[]> = T extends readonly [infer L, ...infer R]?Types<L>&Intersect<R>:unknown
     export type Dict<T> = {
         [key:string]: Partial<Types<T>>;
     } & Record<string, any>;
@@ -185,7 +212,72 @@ export namespace Schema {
                 value = schema.meta.default||fallback;
             }
         }
+        const validateType=(schema:Schema,value:any)=>{
+            switch (schema.meta.type) {
+                case "string":
+                    if(!['string','undefined'].includes(typeof value)) throw new TypeError(`${schema.meta.key||'value'} is not a string`)
+                    break;
+                case "number":
+                    if(!['number','undefined'].includes(typeof value)) throw new TypeError(`${schema.meta.key||'value'} is not a number`)
+                    break;
+                case "boolean":
+                    if(!['boolean','undefined'].includes(typeof value)) throw new TypeError(`${schema.meta.key||'value'} is not a boolean`)
+                    break;
+                case "regexp":
+                    if(!['string','undefined'].includes(typeof value) && !(value instanceof RegExp)) throw new TypeError(`${schema.meta.key||'value'} is not a RegExp|string`)
+                    if(value instanceof RegExp && !value.test('')) throw new TypeError(`${schema.meta.key||'value'} is not a valid RegExp`)
+                    break;
+                case "date":
+                    if(!['number','undefined'].includes(typeof value) && !(value instanceof Date)) throw new TypeError(`${schema.meta.key||'value'} is not a Date|number`)
+                    if(value instanceof Date && isNaN(value.getTime())) throw new TypeError(`${schema.meta.key||'value'} is not a valid Date`)
+                    break;
+                case "object":
+                case "dict":
+                    if(!['object','undefined','null'].includes(typeof value)) throw new TypeError(`${schema.meta.key||'value'} is not a object`)
+                    break;
+                case 'list':
+                case "array":
+                    if(typeof value !== 'undefined' && !Array.isArray(value)) throw new TypeError(`${schema.meta.key||'value'} is not a array`)
+                    break;
+                case "tuple":
+                    if(typeof value !== 'undefined' && !Array.isArray(value)) throw new TypeError(`${schema.meta.key||'value'} is not a valid tuple`)
+                    break;
+                case "union":
+                    if(typeof value !== 'undefined' && !schema.options.list?.some(item=>{
+                        try{
+                            item(value)
+                            return true
+                        }catch {
+                            return false
+                        }
+                    })) throw new TypeError(`${schema.meta.key||'value'} is not a valid union`)
+                    break;
+                case "intersect":
+                    if(typeof value !== 'undefined' && !schema.options.list?.every(item=>{
+                        try{
+                            item(value)
+                            return true
+                        }catch {
+                            return false
+                        }
+                    })) throw new TypeError(`${schema.meta.key||'value'} is not a valid intersect`)
+                    break;
+                case "const":
+                    if(typeof value !== 'undefined' && value !== schema.meta.default) throw new TypeError(`${schema.meta.key||'value'} is not const`)
+                    break;
+                case "percent":
+                    if(typeof value !== 'undefined' && (typeof value !== 'number' || value < 0 || value > 1)) throw new TypeError(`${schema.meta.key||'value'} is not a valid percent`)
+                    break;
+                case "any":
+                    break;
+                case "never":
+                    throw new TypeError(`${schema.meta.key||'value'} is never`)
+                default:
+                    throw new TypeError(`${schema.meta.key||'value'} is not a valid type`)
+            }
+        }
         if(schema.meta.required && typeof value === 'undefined') throw new Error(`${schema.meta.key||'value'} is required`)
+        validateType(schema,value)
         return value;
     }
     export type Option<T=any>=T extends Array<infer R>?R|{

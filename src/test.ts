@@ -35,8 +35,13 @@ const tuple = Schema.tuple([
     Schema.number()
 ] as const).default(['123', 123])()
 console.log(tuple)
-const union = Schema.union([Schema.string().default('123'), Schema.number().default(123)])()
+const union = Schema.union([Schema.string().default('123'), Schema.number().default(123)] as const)()
 console.log(union)
+const intersect=Schema.intersect([
+    Schema.const('123'),
+    Schema.string()
+] as const)('123')
+console.log(intersect)
 const formatter = Schema.dict(
     Schema.array(
         Schema.object({
