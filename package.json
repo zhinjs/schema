@@ -1,6 +1,6 @@
 {
   "name": "@zhinjs/schema",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "zhin配置声明模块",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

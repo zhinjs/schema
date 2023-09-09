@@ -1,5 +1,5 @@
 export class Schema<S = any,T=S> {
-    public [Symbol.toStringTag] = 'ZhinSchema'
+    public [Symbol.toStringTag] = 'Schema'
     constructor(
         public meta: Schema.Meta<S,T>,
         public options: Schema.Options = {},
@@ -43,8 +43,13 @@ export class Schema<S = any,T=S> {
         }
     }
     /** 设置是否必填 */
-    required(required?: boolean): this {
-        this.meta.required = !!required;
+    required(): this {
+        this.meta.required = true;
+        return this;
+    }
+    /** 是否隐藏 */
+    hidden(): this {
+        this.meta.hidden = true;
         return this;
     }
     /** 设置描述 */
@@ -179,6 +184,7 @@ export namespace Schema {
     }
     export interface Meta<S = any,T=S> {
         key?: string;
+        hidden?: boolean;
         type?: string;
         default?: T extends {} ? Partial<T> : T|(()=>T);
         required?: boolean;
@@ -201,7 +207,6 @@ export namespace Schema {
     export type Dict<T> = {
         [key:string]: Partial<Types<T>>;
     } & Record<string, any>;
-    export type DictSchema = Record<string, Schema>
     export type Object<X extends {}>={
         [K in keyof X]?: Types<X[K]>;
     }
