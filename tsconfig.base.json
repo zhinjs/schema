@@ -7,7 +7,9 @@
     "incremental": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
+    "rootDir": "src",
     "strictBindCallApply": true,
     "paths": {
       "@/*": ["./src/*"],
