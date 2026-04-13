@@ -14,7 +14,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zhinjs/schema.git"
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "basic/schema"
   },
   "keywords": [
     "schema",
@@ -24,9 +25,9 @@
   "author": "凉菜",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/zhinjs/schema/issues"
+    "url": "https://github.com/zhinjs/zhin/issues"
   },
-  "homepage": "https://github.com/zhinjs/schema#readme",
+  "homepage": "https://github.com/zhinjs/zhin/tree/main/basic/schema#readme",
   "devDependencies": {
     "@types/node": "latest",
     "dtsc": "^2.3.0",
