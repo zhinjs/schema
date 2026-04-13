@@ -6,7 +6,7 @@ export class Schema<S = any,T=S> {
     ) {
         const _this = this;
         const schema=function (value?:S){
-            const formatter = Schema.resolve(_this.meta.type);
+            const formatter = Schema.resolve(_this.meta.type!);
             if(!formatter) throw new Error(`type ${_this.meta.type} not found`)
             return formatter.call(_this,value);
         } as Schema<S,T>;
@@ -27,12 +27,12 @@ export class Schema<S = any,T=S> {
         if(list) options.list=list.map(item=>Schema.fromJSON(item))
         return new Schema<S,T>(meta,options)
     }
-    toJSON(){
+    toJSON(): Record<string, any>{
         return Object.fromEntries(Object.entries({
             ...this.meta,
             default:typeof this.meta.default === 'function' ? this.meta.default() : this.meta.default,
             inner:this.options.inner?.toJSON(),
-            list:this.options.list?.map(item=>item.toJSON()),
+            list:this.options.list?.map((item: Schema) => item.toJSON()),
             dict:this.options.dict?Object.fromEntries(Object.entries(this.options.dict||{}).map(([key,value])=>[key,value.toJSON()])):undefined,
         }).filter(([key,value])=>typeof value !== 'undefined'))
     }
@@ -164,7 +164,7 @@ export class Schema<S = any,T=S> {
     static never(key?:string){
         return new Schema<never>({key,type:'never'})
     }
-    static resolve<T extends string>(type: T): Schema.Formatter {
+    static resolve<T extends string>(type: T): Schema.Formatter | undefined {
         return Schema.formatters.get(type);
     }
     static extend<T extends string>(type: T, formatter: Schema.Formatter) {
@@ -332,26 +332,26 @@ Schema.extend("boolean", function (this: Schema, value: any) {
 Schema.extend("dict", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value,{});
     return Object.fromEntries(Object.entries(value).map(([key, schema]) => {
-        return [key, this.options.inner(value[key])];
+        return [key, this.options.inner!(value[key])];
     }));
 });
 Schema.extend("list", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value,[]);
-    return value.map((item: any) => this.options.inner(item));
+    return value.map((item: any) => this.options.inner!(item));
 })
 Schema.extend("object", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value,{});
-    return Object.fromEntries(Object.entries(this.options.dict).map(([key, schema]) => {
+    return Object.fromEntries(Object.entries(this.options.dict!).map(([key, schema]) => {
         return [key, schema(value[key])];
     }));
 });
 Schema.extend("tuple", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value,[]);
-    return value.map((item: any, index: number) => this.options.list[index](item));
+    return value.map((item: any, index: number) => this.options.list![index](item));
 });
 Schema.extend("union", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value,[]);
-    for (const schema of this.options.list) {
+    for (const schema of this.options.list!) {
         try {
             return schema(value);
         } catch (e) {}
@@ -367,7 +367,7 @@ Schema.extend("regexp", function (this: Schema, value: any) {
 })
 Schema.extend("intersect", function (this: Schema, value: any) {
     value=Schema.checkDefault(this,value,[]);
-    for (const schema of this.options.list) {
+    for (const schema of this.options.list!) {
         try {
             value = schema(value);
         } catch (e) {
