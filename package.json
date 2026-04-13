@@ -1,5 +1,5 @@
 {
-  "name": "@zhinjs/schema",
+  "name": "@zhin.js/schema",
   "version": "0.0.14",
   "description": "zhin配置声明模块",
   "main": "lib/index.js",
