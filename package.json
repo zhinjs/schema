@@ -22,7 +22,7 @@
   "devDependencies": {
     "typescript": "^6.0.0",
     "@types/node": "^24.3.0",
-    "zhin.js": "^1.0.68"
+    "zhin.js": "workspace:*"
   },
   "repository": {
     "type": "git",
@@ -34,7 +34,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {
-    "zhin.js": "^1.0.68"
+    "zhin.js": "workspace:*"
   },
   "keywords": [
     "zhin",
